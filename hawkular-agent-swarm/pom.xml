@@ -91,6 +91,11 @@
       </dependency>
       <dependency>
         <groupId>org.wildfly.swarm</groupId>
+        <artifactId>wildfly-swarm-logging</artifactId>
+        <version>${version.org.wildfly.swarm}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.swarm</groupId>
         <artifactId>wildfly-swarm-runtime-connector</artifactId>
         <version>${version.org.wildfly.swarm}</version>
       </dependency>
