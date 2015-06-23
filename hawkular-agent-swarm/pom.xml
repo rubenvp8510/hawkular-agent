@@ -20,17 +20,11 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-<!--
   <parent>
     <groupId>org.hawkular.agent</groupId>
     <artifactId>hawkular-agent-parent</artifactId>
-    <version>0.0.10-SNAPSHOT</version>
+    <version>0.2.1-SNAPSHOT</version>
   </parent>
--->
-<!-- DELETE THESE WHEN WE USE HAWKULAR-PARENT -->
-<groupId>org.hawkular.agent</groupId>
-<version>0.0.10-SNAPSHOT</version>
-<!-- DELETE THESE WHEN WE USE HAWKULAR-PARENT -->
 
   <artifactId>hawkular-agent-swarm-parent</artifactId>
   <packaging>pom</packaging>
@@ -43,16 +37,6 @@
   </modules>
 
   <properties>
-<!-- DELETE THESE WHEN WE USE HAWKULAR-PARENT -->
-<maven.compiler.source>1.8</maven.compiler.source>
-<maven.compiler.target>1.8</maven.compiler.target>
-<!-- DELETE THESE WHEN WE USE HAWKULAR-PARENT -->
-
-    <version.org.hawkular.bus>0.0.6</version.org.hawkular.bus>
-    <version.org.hawkular.metrics>0.3.3</version.org.hawkular.metrics>
-    <version.org.hawkular.inventory>0.0.7</version.org.hawkular.inventory>
-
-    <version.org.wildfly>9.0.0.CR1</version.org.wildfly>
     <version.org.wildfly.swarm>1.0.0.Alpha2</version.org.wildfly.swarm>
     <plugin.version.org.wildfly.swarm.fraction>1.0.0.Alpha3</plugin.version.org.wildfly.swarm.fraction>
     <plugin.version.org.wildfly.swarm>1.0.0.Alpha2</plugin.version.org.wildfly.swarm>

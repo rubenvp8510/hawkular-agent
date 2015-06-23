@@ -23,7 +23,7 @@ public class DMRMetricSet {
     private final String name;
     private boolean enabled = true;
     private List<DMRMetric> dmrMetrics = new ArrayList<>();
-    
+
     public DMRMetricSet(String name) {
         this.name = name;
     }

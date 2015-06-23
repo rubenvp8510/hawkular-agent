@@ -23,7 +23,7 @@ public class DMRResourceTypeSet {
     private final String name;
     private boolean enabled = true;
     public List<DMRResourceType> dmrResourceTypes = new ArrayList<>();
-    
+
     public DMRResourceTypeSet(String name) {
         this.name = name;
     }

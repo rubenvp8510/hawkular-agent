@@ -24,7 +24,7 @@
   <parent>
     <groupId>org.hawkular.agent</groupId>
     <artifactId>hawkular-agent-swarm-parent</artifactId>
-    <version>0.0.10-SNAPSHOT</version>
+    <version>0.2.1-SNAPSHOT</version>
   </parent>
 
   <artifactId>hawkular-agent-swarm-api</artifactId>
@@ -52,6 +52,17 @@
           </execution>
         </executions>
       </plugin>
+
+      <plugin>
+        <groupId>com.mycila</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <configuration>
+          <excludes combine.children="append">
+            <exclude>src/main/resources/provided-dependencies.txt</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+
     </plugins>
   </build>
 

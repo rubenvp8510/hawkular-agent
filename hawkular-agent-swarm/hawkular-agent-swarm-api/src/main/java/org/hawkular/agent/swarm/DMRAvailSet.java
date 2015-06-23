@@ -23,7 +23,7 @@ public class DMRAvailSet {
     private final String name;
     private boolean enabled = true;
     public List<DMRAvail> dmrAvails = new ArrayList<>();
-    
+
     public DMRAvailSet(String name) {
         this.name = name;
     }
