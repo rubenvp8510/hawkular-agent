@@ -28,7 +28,7 @@
 
   <groupId>org.hawkular.agent</groupId>
   <artifactId>hawkular-agent-parent</artifactId>
-  <version>0.0.11-SNAPSHOT</version>
+  <version>0.1.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Hawkular Agent Parent</name>
   <inceptionYear>2015</inceptionYear>
@@ -49,10 +49,12 @@
   <properties>
     <version.io.dropwizard.metrics>3.1.0</version.io.dropwizard.metrics>
     <version.org.apache.httpcomponents>4.4.1</version.org.apache.httpcomponents>
-    <version.org.hawkular.bus>0.0.6</version.org.hawkular.bus>
-    <version.org.hawkular.metrics>0.3.3</version.org.hawkular.metrics>
+    <version.org.hawkular.bus>0.1.1</version.org.hawkular.bus>
+    <version.org.hawkular.inventory>0.1.0.Alpha2</version.org.hawkular.inventory>
+    <version.org.hawkular.metrics>0.4.0.Final</version.org.hawkular.metrics>
     <version.org.jboss.msc>1.2.2.Final</version.org.jboss.msc>
     <version.org.jboss.jboss-dmr>1.2.0.Final</version.org.jboss.jboss-dmr>
+    <version.org.jgrapht>0.9.1</version.org.jgrapht>
   </properties>
 
   <dependencyManagement>
@@ -88,6 +90,12 @@
       </dependency>
 
       <dependency>
+        <groupId>org.hawkular.inventory</groupId>
+        <artifactId>inventory-api</artifactId>
+        <version>${version.org.hawkular.inventory}</version>
+      </dependency>
+
+      <dependency>
         <groupId>org.hawkular.metrics</groupId>
         <artifactId>clients-common</artifactId>
         <version>${version.org.hawkular.metrics}</version>
@@ -103,6 +111,12 @@
         <groupId>org.jboss</groupId>
         <artifactId>jboss-dmr</artifactId>
         <version>${version.org.jboss.jboss-dmr}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.jgrapht</groupId>
+        <artifactId>jgrapht-core</artifactId>
+        <version>${version.org.jgrapht}</version>
       </dependency>
 
       <dependency>
