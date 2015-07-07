@@ -36,6 +36,7 @@ import org.hawkular.agent.monitor.inventory.dmr.DMRResourceTypeSet;
 import org.hawkular.agent.monitor.inventory.dmr.LocalDMRManagedServer;
 import org.hawkular.agent.monitor.inventory.dmr.RemoteDMRManagedServer;
 import org.hawkular.agent.monitor.log.MsgLogger;
+import org.hawkular.metrics.client.common.MetricType;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.SimpleAttributeDefinition;
@@ -101,12 +102,18 @@ public class MonitorServiceConfigurationBuilder {
                 if (metricSetValueNode.hasDefined(DMRMetricDefinition.METRIC)) {
                     List<Property> metricsList = metricSetValueNode.get(DMRMetricDefinition.METRIC).asPropertyList();
                     for (Property metricProperty : metricsList) {
-                        String metricName = metricProperty.getName();
+                        String metricName = metricSet.getName() + "~" + metricProperty.getName();
                         DMRMetricType metric = new DMRMetricType(ID.NULL_ID, new Name(metricName));
                         metricSet.getMetricTypeMap().put(metric.getName(), metric);
                         ModelNode metricValueNode = metricProperty.getValue();
                         metric.setPath(getString(metricValueNode, context, DMRMetricAttributes.PATH));
                         metric.setAttribute(getString(metricValueNode, context, DMRMetricAttributes.ATTRIBUTE));
+                        String metricTypeStr = getString(metricValueNode, context, DMRMetricAttributes.METRIC_TYPE);
+                        if (metricTypeStr == null) {
+                            metric.setMetricType(MetricType.GAUGE);
+                        } else {
+                            metric.setMetricType(MetricType.valueOf(metricTypeStr.toUpperCase(Locale.ENGLISH)));
+                        }
                         String metricUnitsStr = getString(metricValueNode, context, DMRMetricAttributes.METRIC_UNITS);
                         if (metricUnitsStr == null) {
                             metric.setMetricUnits(MeasurementUnit.NONE);
@@ -145,7 +152,7 @@ public class MonitorServiceConfigurationBuilder {
                 if (availSetValueNode.hasDefined(DMRAvailDefinition.AVAIL)) {
                     List<Property> availsList = availSetValueNode.get(DMRAvailDefinition.AVAIL).asPropertyList();
                     for (Property availProperty : availsList) {
-                        String availName = availProperty.getName();
+                        String availName = availSet.getName() + "~" + availProperty.getName();
                         DMRAvailType avail = new DMRAvailType(ID.NULL_ID, new Name(availName));
                         availSet.getAvailTypeMap().put(avail.getName(), avail);
                         ModelNode availValueNode = availProperty.getValue();

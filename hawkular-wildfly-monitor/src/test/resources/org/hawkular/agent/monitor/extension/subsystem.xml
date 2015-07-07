@@ -37,7 +37,7 @@
                    url="http://localhost:8080"
                    busContext="/hawkular-bus/message/"
                    inventoryContext="/hawkular/inventory/"
-                   metricsContext="/hawkular-metrics/" />
+                   metricsContext="/hawkular/metrics/" />
 
   <metric-set-dmr name="WildFly Memory Metrics">
     <metric-dmr name="Heap Used"
@@ -46,6 +46,18 @@
                 metricUnits="bytes"
                 path="/core-service=platform-mbean/type=memory"
                 attribute="heap-memory-usage#used" />
+    <metric-dmr name="Counter Test"
+                metricType="counter"
+                interval="30"
+                timeUnits="seconds"
+                path="/"
+                attribute="foobar" />
+    <metric-dmr name="Gauge Test"
+                metricType="gauge"
+                interval="30"
+                timeUnits="seconds"
+                path="/"
+                attribute="foobar" />
   </metric-set-dmr>
 
   <avail-set-dmr name="Server Availability" enabled="false">

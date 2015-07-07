@@ -44,6 +44,11 @@
                 timeUnits="minutes"
                 path="/core-service=platform-mbean/type=memory"
                 attribute="heap-memory-usage#committed" />
+    <metric-dmr name="Heap Max"
+                interval="5"
+                timeUnits="minutes"
+                path="/core-service=platform-mbean/type=memory"
+                attribute="heap-memory-usage#max" />
     <metric-dmr name="NonHeap Used"
                 interval="30"
                 timeUnits="seconds"
@@ -54,6 +59,12 @@
                 timeUnits="minutes"
                 path="/core-service=platform-mbean/type=memory"
                 attribute="non-heap-memory-usage#committed" />
+    <metric-dmr name="Accumulated GC Duration"
+                metricType="counter"
+                interval="1"
+                timeUnits="minutes"
+                path="/core-service=platform-mbean/type=garbage-collector/name=*"
+                attribute="collection-time" />
   </metric-set-dmr>
 
   <metric-set-dmr name="WildFly Threading Metrics" enabled="true">
@@ -72,10 +83,28 @@
                 path="/subsystem=undertow"
                 attribute="active-sessions" />
     <metric-dmr name="Sessions Created"
+                metricType="counter"
                 interval="2"
                 timeUnits="minutes"
                 path="/subsystem=undertow"
                 attribute="sessions-created" />
+    <metric-dmr name="Expired Sessions"
+                metricType="counter"
+                interval="2"
+                timeUnits="minutes"
+                path="/subsystem=undertow"
+                attribute="expired-sessions" />
+    <metric-dmr name="Rejected Sessions"
+                metricType="counter"
+                interval="2"
+                timeUnits="minutes"
+                path="/subsystem=undertow"
+                attribute="rejected-sessions" />
+    <metric-dmr name="Max Active Sessions"
+                interval="2"
+                timeUnits="minutes"
+                path="/subsystem=undertow"
+                attribute="max-active-sessions" />
   </metric-set-dmr>
 
   <metric-set-dmr name="Servlet Metrics" enabled="true">
@@ -96,6 +125,7 @@
                 path="/"
                 attribute="total-request-time" />
     <metric-dmr name="Request Count"
+                metricType="counter"
                 interval="5"
                 timeUnits="minutes"
                 path="/"
@@ -109,6 +139,7 @@
                 path="/"
                 attribute="execution-time" />
     <metric-dmr name="Invocations"
+                metricType="counter"
                 interval="5"
                 timeUnits="minutes"
                 path="/"
@@ -132,6 +163,7 @@
                 path="/"
                 attribute="execution-time" />
     <metric-dmr name="Invocations"
+                metricType="counter"
                 interval="5"
                 timeUnits="minutes"
                 path="/"
@@ -146,7 +178,7 @@
                 timeUnits="minutes"
                 path="/"
                 attribute="wait-time" />
-    <metric-dmr name="Pool Availabile Count"
+    <metric-dmr name="Pool Available Count"
                 interval="5"
                 timeUnits="minutes"
                 path="/"
@@ -180,6 +212,7 @@
                 path="/"
                 attribute="execution-time" />
     <metric-dmr name="Invocations"
+                metricType="counter"
                 interval="5"
                 timeUnits="minutes"
                 path="/"
@@ -432,9 +465,6 @@
       <resource-config-dmr name="Hostname"
                            path="/core-service=server-environment"
                            attribute="qualified-host-name" />
-      <resource-config-dmr name="Max Heap"
-                           path="/core-service=platform-mbean/type=memory"
-                           attribute="heap-memory-usage#max" />
       <resource-config-dmr name="Version"
                            attribute="release-version" />
       <operation-dmr name="Reload Server" operationName="reload" path="/" />
@@ -522,7 +552,7 @@
                 password="adminPass"
                 resourceTypeSets="Main,Deployment,Web Component,EJB" />
 
-    <local-dmr name="Self"
+    <local-dmr name="Local"
                enabled="true"
                resourceTypeSets="Hawkular,Main,Deployment,Web Component,EJB,Datasource,Transaction Manager" />
 

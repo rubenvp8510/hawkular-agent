@@ -110,7 +110,7 @@ public class HawkularStorageAdapter implements StorageAdapter {
             String key = task.getKeyGenerator().generateKey(task);
             long timestamp = datapoint.getTimestamp();
             double value = datapoint.getValue();
-            payloadBuilder.addDataPoint(key, timestamp, value);
+            payloadBuilder.addDataPoint(key, timestamp, value, datapoint.getMetricType());
         }
 
         store(payloadBuilder);
@@ -339,7 +339,7 @@ public class HawkularStorageAdapter implements StorageAdapter {
         try {
             // get the payload in JSON format
             org.hawkular.inventory.api.model.ResourceType.Blueprint rtPojo;
-            rtPojo = new org.hawkular.inventory.api.model.ResourceType.Blueprint(getInventoryId(resourceType), "0.1",
+            rtPojo = new org.hawkular.inventory.api.model.ResourceType.Blueprint(getInventoryId(resourceType),
                     resourceType.getProperties());
             String jsonPayload = new GsonBuilder().create().toJson(rtPojo);
 
@@ -551,7 +551,9 @@ public class HawkularStorageAdapter implements StorageAdapter {
 
         try {
             // get the payload in JSON format
-            String jsonPayload = String.format("{\"id\":\"%s\"}", metricTypeId);
+            ArrayList<String> id = new ArrayList<>();
+            id.add(metricTypeId);
+            String jsonPayload = new GsonBuilder().create().toJson(id);
 
             // build the REST URL
             StringBuilder url = Util.getContextUrlString(this.config.url, this.config.inventoryContext);
