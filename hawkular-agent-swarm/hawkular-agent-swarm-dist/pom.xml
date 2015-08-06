@@ -36,11 +36,9 @@
         <groupId>org.wildfly.swarm</groupId>
         <artifactId>wildfly-swarm-plugin</artifactId>
         <version>${plugin.version.org.wildfly.swarm}</version>
-        <!--
         <configuration>
           <mainClass>org.hawkular.agent.swarm.Main</mainClass>
         </configuration>
-        -->
         <executions>
           <execution>
             <goals>
