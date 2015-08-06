@@ -21,9 +21,9 @@
     <artifact name="org.hawkular.metrics:clients-common:${version.org.hawkular.metrics}"/>
     <artifact name="com.google.code.gson:gson:2.2.4"/>
     <artifact name="org.hawkular.bus:hawkular-bus-rest-client:${version.org.hawkular.bus}"/>
-    <artifact name="org.hawkular.agent:hawkular-dmr-client:0.0.10-SNAPSHOT"/>
-    <artifact name="org.hawkular.inventory:inventory-api:${version.org.hawkular.inventory}"/>
-    <artifact name="org.hawkular.agent:hawkular-monitor:0.0.10-SNAPSHOT"/>
+    <artifact name="org.hawkular.agent:hawkular-dmr-client:${project.version}"/>
+    <artifact name="org.hawkular.inventory:hawkular-inventory-api:${version.org.hawkular.inventory}"/>
+    <artifact name="org.hawkular.agent:hawkular-monitor:${project.version}"/>
     <artifact name="io.dropwizard.metrics:metrics-core:3.1.0"/>
     <artifact name="org.jgrapht:jgrapht-core:0.9.1"/>
   </resources>
