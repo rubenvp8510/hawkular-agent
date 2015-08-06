@@ -26,10 +26,11 @@ import java.net.MalformedURLException;
 import java.net.URLEncoder;
 import java.util.Base64;
 
+import org.hawkular.inventory.json.InventoryJacksonConfig;
+
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.hawkular.inventory.json.InventoryJacksonConfig;
 
 /**
  * Just some basic utilities.

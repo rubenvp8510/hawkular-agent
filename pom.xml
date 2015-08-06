@@ -23,12 +23,12 @@
   <parent>
     <groupId>org.hawkular</groupId>
     <artifactId>hawkular-parent</artifactId>
-    <version>18</version>
+    <version>19</version>
   </parent>
 
   <groupId>org.hawkular.agent</groupId>
   <artifactId>hawkular-agent-parent</artifactId>
-  <version>0.3.2-SNAPSHOT</version>
+  <version>0.3.5-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Hawkular Agent Parent</name>
   <inceptionYear>2015</inceptionYear>
@@ -51,8 +51,8 @@
     <version.io.dropwizard.metrics>3.1.0</version.io.dropwizard.metrics>
     <!-- TODO DELETE THIS WHEN WE NO LONGER SEND TWO MESSAGES PER METRIC -->
     <version.org.apache.httpcomponents>4.4.1</version.org.apache.httpcomponents>
-    <version.org.hawkular.bus>0.3.0.Final</version.org.hawkular.bus>
-    <version.org.hawkular.inventory>0.2.0.Alpha1</version.org.hawkular.inventory>
+    <version.org.hawkular.bus>0.3.3.Final</version.org.hawkular.bus>
+    <version.org.hawkular.inventory>0.2.0.Final</version.org.hawkular.inventory>
     <version.org.hawkular.metrics>0.5.0.Final</version.org.hawkular.metrics>
     <version.org.jgrapht>0.9.1</version.org.jgrapht>
   </properties>
@@ -141,6 +141,14 @@
         <groupId>org.jgrapht</groupId>
         <artifactId>jgrapht-core</artifactId>
         <version>${version.org.jgrapht}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.wildfly.bom</groupId>
+        <artifactId>jboss-javaee-7.0-wildfly</artifactId>
+        <version>${version.org.wildfly}</version>
+        <type>pom</type>
+        <scope>import</scope>
       </dependency>
 
       <dependency>

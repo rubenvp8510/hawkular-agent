@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.hawkular.agent.monitor.extension.MonitorServiceConfiguration;
 import org.hawkular.agent.monitor.inventory.ManagedServer;
 import org.hawkular.agent.monitor.inventory.dmr.DMRInventoryManager;
 import org.hawkular.agent.monitor.log.MsgLogger;
@@ -40,19 +41,28 @@ public class FeedCommProcessor implements WebSocketListener {
 
     private static final Map<String, Class<? extends Command<?, ?>>> VALID_COMMANDS;
 
+    private final MonitorServiceConfiguration config;
     private final Map<ManagedServer, DMRInventoryManager> dmrServerInventories;
     private final ExecutorService sendExecutor = Executors.newSingleThreadExecutor();
 
     private WebSocket webSocket;
 
+
     static {
         VALID_COMMANDS = new HashMap<>();
         VALID_COMMANDS.put(EchoCommand.REQUEST_CLASS.getName(), EchoCommand.class);
+        VALID_COMMANDS.put(GenericErrorResponseCommand.REQUEST_CLASS.getName(), GenericErrorResponseCommand.class);
         VALID_COMMANDS.put(ExecuteOperationCommand.REQUEST_CLASS.getName(), ExecuteOperationCommand.class);
     }
 
-    public FeedCommProcessor(Map<ManagedServer, DMRInventoryManager> dmrServerInventories) {
+    public FeedCommProcessor(MonitorServiceConfiguration config,
+            Map<ManagedServer, DMRInventoryManager> dmrServerInventories) {
+        this.config = config;
         this.dmrServerInventories = dmrServerInventories;
+    }
+
+    public MonitorServiceConfiguration getMonitorServiceConfiguration() {
+        return config;
     }
 
     public Map<ManagedServer, DMRInventoryManager> getDmrServerInventories() {
@@ -174,7 +184,7 @@ public class FeedCommProcessor implements WebSocketListener {
             }
         } catch (Throwable t) {
             MsgLogger.LOG.errorCommandExecutionFailureFeed(requestClassName, t);
-            String errorMessage = "Command failed[" + requestClassName + "]";
+            String errorMessage = "Command failed [" + requestClassName + "]";
             response = new GenericErrorResponseBuilder()
                     .setThrowable(t)
                     .setErrorMessage(errorMessage)

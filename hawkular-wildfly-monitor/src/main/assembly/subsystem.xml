@@ -76,6 +76,42 @@
                 attribute="thread-count" />
   </metric-set-dmr>
 
+  <metric-set-dmr name="WildFly Aggregated Web Metrics" enabled="true">
+    <metric-dmr name="Aggregated Active Web Sessions"
+                interval="1"
+                timeUnits="minutes"
+                path="/deployment=*/subsystem=undertow"
+                attribute="active-sessions" />
+    <metric-dmr name="Aggregated Max Active Web Sessions"
+                interval="1"
+                timeUnits="minutes"
+                path="/deployment=*/subsystem=undertow"
+                attribute="max-active-sessions" />
+    <metric-dmr name="Aggregated Expired Web Sessions"
+                metricType="counter"
+                interval="1"
+                timeUnits="minutes"
+                path="/deployment=*/subsystem=undertow"
+                attribute="expired-sessions" />
+    <metric-dmr name="Aggregated Rejected Web Sessions"
+                metricType="counter"
+                interval="1"
+                timeUnits="minutes"
+                path="/deployment=*/subsystem=undertow"
+                attribute="rejected-sessions" />
+    <metric-dmr name="Aggregated Servlet Request Time"
+                interval="1"
+                timeUnits="minutes"
+                path="/deployment=*/subsystem=undertow/servlet=*"
+                attribute="total-request-time" />
+    <metric-dmr name="Aggregated Servlet Request Count"
+                metricType="counter"
+                interval="1"
+                timeUnits="minutes"
+                path="/deployment=*/subsystem=undertow/servlet=*"
+                attribute="request-count" />
+  </metric-set-dmr>
+
   <metric-set-dmr name="Undertow Metrics" enabled="true">
     <metric-dmr name="Active Sessions"
                 interval="2"
@@ -392,21 +428,25 @@
 
   <metric-set-dmr name="Transactions Metrics" enabled="true">
     <metric-dmr name="Number of Aborted Transactions"
+                metricType="counter"
                 interval="10"
                 timeUnits="minutes"
                 path="/"
                 attribute="number-of-aborted-transactions" />
     <metric-dmr name="Number of Application Rollbacks"
+                metricType="counter"
                 interval="10"
                 timeUnits="minutes"
                 path="/"
                 attribute="number-of-application-rollbacks" />
     <metric-dmr name="Number of Committed Transactions"
+                metricType="counter"
                 interval="10"
                 timeUnits="minutes"
                 path="/"
                 attribute="number-of-committed-transactions" />
     <metric-dmr name="Number of Heuristics"
+                metricType="counter"
                 interval="10"
                 timeUnits="minutes"
                 path="/"
@@ -422,11 +462,13 @@
                 path="/"
                 attribute="number-of-nested-transactions" />
     <metric-dmr name="Number of Resource Rollbacks"
+                metricType="counter"
                 interval="10"
                 timeUnits="minutes"
                 path="/"
                 attribute="number-of-resource-rollbacks" />
     <metric-dmr name="Number of Timed Out Transactions"
+                metricType="counter"
                 interval="10"
                 timeUnits="minutes"
                 path="/"
@@ -460,7 +502,7 @@
     <resource-type-dmr name="WildFly Server"
                        resourceNameTemplate="WildFly Server [%ManagedServerName] [${jboss.node.name:localhost}]"
                        path="/"
-                       metricSets="WildFly Memory Metrics,WildFly Threading Metrics"
+                       metricSets="WildFly Memory Metrics,WildFly Threading Metrics,WildFly Aggregated Web Metrics"
                        availSets="Server Availability">
       <resource-config-dmr name="Hostname"
                            path="/core-service=server-environment"
@@ -476,6 +518,12 @@
                        resourceNameTemplate="Bus Broker"
                        path="/subsystem=hawkular-bus-broker"
                        parents="WildFly Server"/>
+    <resource-type-dmr name="Monitor Agent"
+                       resourceNameTemplate="Monitor Agent"
+                       path="/subsystem=hawkular-monitor"
+                       parents="WildFly Server">
+      <operation-dmr name="Status" operationName="status" path="/" />
+    </resource-type-dmr>
   </resource-type-set-dmr>
 
   <resource-type-set-dmr name="Deployment" enabled="true">
@@ -484,13 +532,19 @@
                        path="/deployment=*"
                        parents="WildFly Server"
                        metricSets="Undertow Metrics"
-                       availSets="Deployment Status" />
+                       availSets="Deployment Status">
+      <operation-dmr name="Redeploy" operationName="redeploy" path="/" />
+      <operation-dmr name="Remove" operationName="remove" path="/" />
+      <operation-dmr name="Undeploy" operationName="undeploy" path="/" />
+    </resource-type-dmr>
 
     <resource-type-dmr name="SubDeployment"
                        resourceNameTemplate="SubDeployment [%-]"
                        path="/subdeployment=*"
                        parents="Deployment"
-                       metricSets="Undertow Metrics" />
+                       metricSets="Undertow Metrics">
+    </resource-type-dmr>
+
   </resource-type-set-dmr>
 
   <resource-type-set-dmr name="Web Component" enabled="true">
