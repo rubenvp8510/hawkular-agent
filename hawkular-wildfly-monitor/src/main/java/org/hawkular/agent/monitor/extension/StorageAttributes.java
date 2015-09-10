@@ -97,8 +97,7 @@ public interface StorageAttributes {
             ModelType.STRING)
             .setAllowNull(true)
             .setAllowExpression(true)
-            // this will be changed to /hawkular/accounts (HAWKULAR-454)
-            .setDefaultValue(new ModelNode("/hawkular-accounts/"))
+            .setDefaultValue(new ModelNode("/hawkular/accounts/"))
             .addFlag(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
             .build();
 
@@ -131,7 +130,7 @@ public interface StorageAttributes {
             ModelType.STRING)
             .setAllowNull(true)
             .setAllowExpression(true)
-            .setDefaultValue(new ModelNode("/hawkular/feed-comm/"))
+            .setDefaultValue(new ModelNode("/hawkular/command-gateway/"))
             .addFlag(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
             .build();
 

@@ -27,13 +27,18 @@ import org.hawkular.agent.monitor.extension.MonitorServiceConfiguration;
 import org.hawkular.agent.monitor.inventory.ManagedServer;
 import org.hawkular.agent.monitor.inventory.dmr.DMRInventoryManager;
 import org.hawkular.agent.monitor.log.MsgLogger;
+import org.hawkular.agent.monitor.service.Util;
+import org.hawkular.agent.monitor.storage.HttpClientBuilder;
 import org.hawkular.bus.common.BasicMessage;
 import org.hawkular.bus.common.BasicMessageWithExtraData;
-import org.hawkular.feedcomm.api.ApiDeserializer;
-import org.hawkular.feedcomm.api.GenericErrorResponseBuilder;
+import org.hawkular.cmdgw.api.ApiDeserializer;
+import org.hawkular.cmdgw.api.AuthMessage;
+import org.hawkular.cmdgw.api.Authentication;
+import org.hawkular.cmdgw.api.GenericErrorResponseBuilder;
 
 import com.squareup.okhttp.Response;
 import com.squareup.okhttp.ws.WebSocket;
+import com.squareup.okhttp.ws.WebSocketCall;
 import com.squareup.okhttp.ws.WebSocketListener;
 
 import okio.Buffer;
@@ -42,26 +47,46 @@ import okio.BufferedSource;
 public class FeedCommProcessor implements WebSocketListener {
 
     private static final Map<String, Class<? extends Command<?, ?>>> VALID_COMMANDS;
-
-    private final MonitorServiceConfiguration config;
-    private final Map<ManagedServer, DMRInventoryManager> dmrServerInventories;
-    private final ExecutorService sendExecutor = Executors.newSingleThreadExecutor();
-
-    private WebSocket webSocket;
-
-
     static {
         VALID_COMMANDS = new HashMap<>();
         VALID_COMMANDS.put(EchoCommand.REQUEST_CLASS.getName(), EchoCommand.class);
         VALID_COMMANDS.put(GenericErrorResponseCommand.REQUEST_CLASS.getName(), GenericErrorResponseCommand.class);
         VALID_COMMANDS.put(ExecuteOperationCommand.REQUEST_CLASS.getName(), ExecuteOperationCommand.class);
         VALID_COMMANDS.put(DeployApplicationCommand.REQUEST_CLASS.getName(), DeployApplicationCommand.class);
+        VALID_COMMANDS.put(AddJdbcDriverCommand.REQUEST_CLASS.getName(), AddJdbcDriverCommand.class);
     }
 
-    public FeedCommProcessor(MonitorServiceConfiguration config,
+    private final int disconnectCode = 1000;
+    private final String disconnectReason = "Shutting down FeedCommProcessor";
+
+    private final HttpClientBuilder httpClientBuilder;
+    private final MonitorServiceConfiguration config;
+    private final Map<ManagedServer, DMRInventoryManager> dmrServerInventories;
+    private final String feedcommUrl;
+    private final ExecutorService sendExecutor = Executors.newSingleThreadExecutor();
+
+    private WebSocketCall webSocketCall;
+    private WebSocket webSocket;
+
+    public FeedCommProcessor(HttpClientBuilder httpClientBuilder, MonitorServiceConfiguration config, String feedId,
             Map<ManagedServer, DMRInventoryManager> dmrServerInventories) {
+        if (feedId == null || feedId.isEmpty()) {
+            throw new IllegalArgumentException("Must have a valid feed ID to communicate with the server");
+        }
+
+        this.httpClientBuilder = httpClientBuilder;
         this.config = config;
         this.dmrServerInventories = dmrServerInventories;
+
+        try {
+            StringBuilder url;
+            url = Util.getContextUrlString(config.storageAdapter.url, config.storageAdapter.feedcommContext);
+            url.append("feed/").append(feedId);
+            this.feedcommUrl = url.toString().replaceFirst("https?:", (config.storageAdapter.useSSL) ? "wss:" : "ws:");
+            MsgLogger.LOG.infoFeedCommUrl(this.feedcommUrl);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Cannot build URL to the server command-gateway endpoint", e);
+        }
     }
 
     public MonitorServiceConfiguration getMonitorServiceConfiguration() {
@@ -73,29 +98,36 @@ public class FeedCommProcessor implements WebSocketListener {
     }
 
     /**
-     * If the connection is open, this will return the websocket object that can
-     * be used to send messages to the server. If the connection is closed, null
-     * will be returned.
-     *
-     * @return the websocket if connection is open, null otherwise
+     * @return true if this object is currently connected to the websocket.
      */
-    public WebSocket getWebSocket() {
-        return this.webSocket;
+    public boolean isConnected() {
+        return webSocket != null;
     }
 
-    /**
-     * Close the web socket with the given reason and code.
-     *
-     * @param code the close code
-     * @param reason the close reason
-     */
-    public void close(int code, String reason) {
-        if (this.webSocket != null) {
+    public void connect() throws Exception {
+        disconnect(); // disconnect to any old connection we had
+
+        webSocketCall = httpClientBuilder.createWebSocketCall(feedcommUrl, null);
+        webSocketCall.enqueue(this);
+    }
+
+    public void disconnect() {
+        if (webSocket != null) {
             try {
-                this.webSocket.close(code, reason);
+                webSocket.close(disconnectCode, disconnectReason);
             } catch (Exception e) {
-                MsgLogger.LOG.warnFailedToCloseWebSocket(code, reason, e);
+                MsgLogger.LOG.warnFailedToCloseWebSocket(disconnectCode, disconnectReason, e);
             }
+            webSocket = null;
+        }
+
+        if (webSocketCall != null) {
+            try {
+                webSocketCall.cancel();
+            } catch (Exception e) {
+                MsgLogger.LOG.errorCannotCloseWebSocketCall(e);
+            }
+            webSocketCall = null;
         }
     }
 
@@ -106,13 +138,15 @@ public class FeedCommProcessor implements WebSocketListener {
      * @param message the message to send
      */
     public void sendAsync(BasicMessage message) {
-        if (this.webSocket == null) {
-            throw new IllegalStateException("The connection to the server is closed. Cannot send any messages");
+        if (webSocket == null) {
+            throw new IllegalStateException("WebSocket connection was closed. Cannot send any messages");
         }
+
+        configurationAuthentication(message);
 
         String messageString = ApiDeserializer.toHawkularFormat(message);
 
-        this.sendExecutor.execute(new Runnable() {
+        sendExecutor.execute(new Runnable() {
             @Override
             public void run() {
                 try {
@@ -133,9 +167,11 @@ public class FeedCommProcessor implements WebSocketListener {
      * @throws IOException if the message failed to be sent
      */
     public void sendSync(BasicMessage message) throws Exception {
-        if (this.webSocket == null) {
-            throw new IllegalStateException("The connection to the server is closed. Cannot send any messages");
+        if (webSocket == null) {
+            throw new IllegalStateException("WebSocket connection was closed. Cannot send any messages");
         }
+
+        configurationAuthentication(message);
 
         String messageString = ApiDeserializer.toHawkularFormat(message);
         Buffer buffer = new Buffer();
@@ -151,8 +187,28 @@ public class FeedCommProcessor implements WebSocketListener {
 
     @Override
     public void onClose(int reasonCode, String reason) {
-        this.webSocket = null;
+        webSocket = null;
         MsgLogger.LOG.infoClosedFeedComm(reasonCode, reason);
+
+        // We always want a connection - so try to get another one.
+        // Note that we don't try to get another connection if we think we'll never get one;
+        // This avoids a potential infinite loop of continually trying (and failing) to get a connection.
+        // We also don't try to get another one if we were explicitly told to disconnect.
+        if (!(disconnectCode == reasonCode && disconnectReason.equals(reason))) {
+            switch (reasonCode) {
+                case 1008: { // VIOLATED POLICY - don't try again since it probably will fail again (bad credentials?)
+                    break;
+                }
+                default: {
+                    try {
+                        connect();
+                    } catch (Exception e) {
+                        MsgLogger.LOG.errorCannotReconnectToWebSocket(e);
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     @Override
@@ -230,5 +286,23 @@ public class FeedCommProcessor implements WebSocketListener {
     @Override
     public void onPong(Buffer buffer) {
         // no-op
+    }
+
+    private void configurationAuthentication(BasicMessage message) {
+        if (!(message instanceof AuthMessage)) {
+            return; // this message doesn't need authentication
+        }
+
+        AuthMessage authMessage = (AuthMessage) message;
+
+        Authentication auth = authMessage.getAuthentication();
+        if (auth != null) {
+            return; // authentication already configured; assume whoever did it knew what they were doing and keep it
+        }
+
+        auth = new Authentication();
+        auth.setUsername(this.config.storageAdapter.username);
+        auth.setPassword(this.config.storageAdapter.password);
+        authMessage.setAuthentication(auth);
     }
 }

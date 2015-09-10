@@ -18,21 +18,18 @@
 
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
     <groupId>org.hawkular.agent</groupId>
     <artifactId>hawkular-agent-parent</artifactId>
-    <version>0.3.5-SNAPSHOT</version>
+    <version>0.6.2.Final-SNAPSHOT</version>
   </parent>
 
   <artifactId>hawkular-monitor</artifactId>
 
   <name>Hawkular Monitor WildFly Subsystem</name>
   <description>A WildFly subsystem that is able to collect metrics and send them to Hawkular.</description>
-
-  <packaging>jar</packaging>
 
   <properties>
     <!-- used to replace the variables in module.xml -->
@@ -65,6 +62,13 @@
     </dependency>
 
     <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>2.4</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
       <groupId>io.dropwizard.metrics</groupId>
       <artifactId>metrics-core</artifactId>
     </dependency>
@@ -76,8 +80,8 @@
     </dependency>
 
     <dependency>
-      <groupId>org.hawkular.bus</groupId>
-      <artifactId>hawkular-feed-comm-api</artifactId>
+      <groupId>org.hawkular.cmdgw</groupId>
+      <artifactId>hawkular-command-gateway-api</artifactId>
     </dependency>
 
     <dependency>
@@ -86,7 +90,7 @@
       <version>${project.version}</version>
     </dependency>
 
-    <!-- START DELETE THIS WHEN WE NO LONGER SEND TWO MESSAGES PER METRIC -->
+    <!-- TODO: START DELETE THIS WHEN WE NO LONGER SEND TWO MESSAGES PER METRIC -->
     <!-- DON'T FORGET TO REMOVE THE DEP FROM module.xml -->
     <!-- DON'T FORGET TO REMOVE THE DEP FROM ../pom.xml DepManagement Section -->
     <dependency>
@@ -185,6 +189,17 @@
     </resources>
 
     <plugins>
+
+      <plugin>
+        <groupId>com.mycila</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <configuration>
+          <excludes combine.children="append">
+            <exclude>src/test/resources/org/hawkular/agent/monitor/modules/*</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-assembly-plugin</artifactId>

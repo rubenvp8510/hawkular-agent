@@ -37,9 +37,12 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.hawkular.agent.monitor.api.HawkularMonitorContext;
 import org.hawkular.agent.monitor.api.HawkularMonitorContextImpl;
+import org.hawkular.agent.monitor.api.InventoryStorage;
 import org.hawkular.agent.monitor.diagnostics.Diagnostics;
 import org.hawkular.agent.monitor.diagnostics.DiagnosticsImpl;
 import org.hawkular.agent.monitor.diagnostics.JBossLoggingReporter;
@@ -47,14 +50,16 @@ import org.hawkular.agent.monitor.diagnostics.JBossLoggingReporter.LoggingLevel;
 import org.hawkular.agent.monitor.diagnostics.StorageReporter;
 import org.hawkular.agent.monitor.extension.MonitorServiceConfiguration;
 import org.hawkular.agent.monitor.extension.MonitorServiceConfiguration.StorageReportTo;
-import org.hawkular.agent.monitor.feedcomm.FeedComm;
+import org.hawkular.agent.monitor.feedcomm.FeedCommProcessor;
 import org.hawkular.agent.monitor.inventory.AvailTypeManager;
 import org.hawkular.agent.monitor.inventory.ID;
 import org.hawkular.agent.monitor.inventory.InventoryIdUtil;
 import org.hawkular.agent.monitor.inventory.ManagedServer;
 import org.hawkular.agent.monitor.inventory.MetricTypeManager;
 import org.hawkular.agent.monitor.inventory.Name;
+import org.hawkular.agent.monitor.inventory.Resource;
 import org.hawkular.agent.monitor.inventory.ResourceManager;
+import org.hawkular.agent.monitor.inventory.ResourceType;
 import org.hawkular.agent.monitor.inventory.ResourceTypeManager;
 import org.hawkular.agent.monitor.inventory.dmr.DMRAvailInstance;
 import org.hawkular.agent.monitor.inventory.dmr.DMRAvailType;
@@ -64,6 +69,7 @@ import org.hawkular.agent.monitor.inventory.dmr.DMRMetricInstance;
 import org.hawkular.agent.monitor.inventory.dmr.DMRMetricType;
 import org.hawkular.agent.monitor.inventory.dmr.DMRMetricTypeSet;
 import org.hawkular.agent.monitor.inventory.dmr.DMRResource;
+import org.hawkular.agent.monitor.inventory.dmr.DMRResourceConfigurationPropertyInstance;
 import org.hawkular.agent.monitor.inventory.dmr.DMRResourceType;
 import org.hawkular.agent.monitor.inventory.dmr.DMRResourceTypeSet;
 import org.hawkular.agent.monitor.inventory.dmr.LocalDMRManagedServer;
@@ -86,9 +92,7 @@ import org.hawkular.agent.monitor.storage.MetricStorageProxy;
 import org.hawkular.agent.monitor.storage.MetricsOnlyStorageAdapter;
 import org.hawkular.agent.monitor.storage.StorageAdapter;
 import org.hawkular.dmrclient.Address;
-import org.hawkular.inventory.api.model.CanonicalPath;
 import org.hawkular.inventory.api.model.Feed;
-import org.hawkular.inventory.json.PathDeserializer;
 import org.jboss.as.controller.ControlledProcessState;
 import org.jboss.as.controller.ControlledProcessStateService;
 import org.jboss.as.controller.ModelController;
@@ -145,7 +149,7 @@ public class MonitorService implements Service<MonitorService> {
     private HttpClientBuilder httpClientBuilder;
 
     // used to send data to the server over the feed communications channel
-    private FeedComm feedComm;
+    private FeedCommProcessor feedComm;
 
     // scheduled metric and avail collections
     private SchedulerService schedulerService;
@@ -303,7 +307,8 @@ public class MonitorService implements Service<MonitorService> {
                 return;
             }
 
-            // try to connect to the server over the feed-comm channel - if it fails, just log an error but keep going
+            /* try to connect to the server over the command-gateway channel
+             * - if it fails, just log an error but keep going */
             try {
                 connectToFeedCommChannel();
             } catch (Exception e) {
@@ -503,32 +508,46 @@ public class MonitorService implements Service<MonitorService> {
         schedulerService = new SchedulerService(schedulerConfig, selfId, diagnostics, storageAdapter,
                 createLocalClientFactory(), this.httpClientBuilder);
 
-        // if we are participating in a full hawkular environment, add resource and its metadata to inventory now
-        if (this.configuration.storageAdapter.type == MonitorServiceConfiguration.StorageReportTo.HAWKULAR) {
-
-            ResourceManager<DMRResource> resourceManager;
-            BreadthFirstIterator<DMRResource, DefaultEdge> bIter;
-
-            try {
-                for (DMRInventoryManager im : this.dmrServerInventories.values()) {
-                    resourceManager = im.getResourceManager();
-                    bIter = resourceManager.getBreadthFirstIterator();
-                    while (bIter.hasNext()) {
-                        DMRResource resource = bIter.next();
-                        inventoryStorageProxy.storeResourceType(resource.getResourceType());
-                        inventoryStorageProxy.storeResource(resource);
-                    }
-                }
-            } catch (Throwable t) {
-                // TODO for now, just stop what we were doing and whatever we have in inventory is "good enough"
-                // for prototyping, this is good enough, but we'll need better handling later
-                MsgLogger.LOG.errorf(t,
-                        "Failed to completely add our inventory - but we will keep going with partial inventory");
-            }
-        }
-
         // now we can begin collecting metrics
         schedulerService.start();
+
+        // if we are participating in a full hawkular environment, add resource and its metadata to inventory now
+        if (this.configuration.storageAdapter.type == MonitorServiceConfiguration.StorageReportTo.HAWKULAR) {
+            Runnable populateInventory = new Runnable() {
+                @Override
+                public void run() {
+                    ResourceManager<DMRResource> resourceManager;
+                    BreadthFirstIterator<DMRResource, DefaultEdge> bIter;
+
+                    try {
+                        long start = System.nanoTime();
+                        for (DMRInventoryManager im : MonitorService.this.dmrServerInventories.values()) {
+                            resourceManager = im.getResourceManager();
+                            InventoryStorage invStorage = new ServerAddressResolver(im.getManagedServer(),
+                                    inventoryStorageProxy);
+                            bIter = resourceManager.getBreadthFirstIterator();
+                            while (bIter.hasNext()) {
+                                DMRResource resource = bIter.next();
+                                invStorage.storeResourceType(resource.getResourceType());
+                                invStorage.storeResource(resource);
+                            }
+                        }
+                        long elapsed = System.nanoTime() - start;
+                        MsgLogger.LOG.infof("Inventory successfully initialized. It took "
+                                + ((double) elapsed / 1000000000.0)
+                                + " seconds.");
+                    } catch (Throwable t) {
+                        // TODO for now stop what we were doing and whatever we have in inventory is "good enough"
+                        // for prototyping, this is good enough, but we'll need better handling later
+                        MsgLogger.LOG.errorf(t,
+                                "Failed to completely add inventory - keep going with partial inventory");
+                    }
+                }
+            };
+
+            // run it in background so we don't block the subsystem startup
+            new Thread(populateInventory, "Hawkular Monitor Agent Populate Inventory").start();
+        }
     }
 
     private SchedulerConfiguration prepareSchedulerConfig() {
@@ -764,10 +783,6 @@ public class MonitorService implements Service<MonitorService> {
                 // probably just haven't been registered yet, keep going
             }
 
-            // set up custom json deserializer then needs the tenantId to work properly
-            PathDeserializer.setCurrentCanonicalOrigin(CanonicalPath.of().tenant(configuration.storageAdapter.tenantId)
-                    .get());
-
             // get the payload in JSON format
             String environmentId = "test";
             Feed.Blueprint feedPojo = new Feed.Blueprint(desiredFeedId, null);
@@ -816,7 +831,78 @@ public class MonitorService implements Service<MonitorService> {
     }
 
     private void connectToFeedCommChannel() throws Exception {
-        feedComm = new FeedComm(this.httpClientBuilder, this.configuration, this.feedId, this.dmrServerInventories);
+        feedComm = new FeedCommProcessor(this.httpClientBuilder, this.configuration, this.feedId,
+                this.dmrServerInventories);
         feedComm.connect();
+    }
+
+    /**
+     * A filter that replaces 0.0.0.0 server address with the list of addresses got from
+     * {@link InetAddress#getByName(String)} where the argument of {@code getByName(String)} is the host the agent uses
+     * to query the AS'es DMR.
+     */
+    private static final class ServerAddressResolver implements InventoryStorage {
+        private final InventoryStorage delegate;
+        private final ManagedServer server;
+
+        public ServerAddressResolver(ManagedServer server, InventoryStorage delegate) {
+            super();
+            this.delegate = delegate;
+            this.server = server;
+        }
+
+        private InetAddress[] resolveHost() throws UnknownHostException {
+            String host = null;
+            if (server instanceof RemoteDMRManagedServer) {
+                RemoteDMRManagedServer remoteServer = (RemoteDMRManagedServer) server;
+                host = remoteServer.getHost();
+            } else if (server instanceof LocalDMRManagedServer) {
+                host = InetAddress.getLocalHost().getCanonicalHostName();
+            } else {
+                throw new IllegalStateException("Unexpected type of managed server '" + server.getClass().getName()
+                        + "'; expected '" + RemoteDMRManagedServer.class.getName() + "' or '"
+                        + LocalDMRManagedServer.class.getName() + "'. Please report this bug.");
+            }
+            return InetAddress.getAllByName(host);
+        }
+
+        @Override
+        public void storeResourceType(ResourceType<?, ?, ?, ?> resourceType) {
+            delegate.storeResourceType(resourceType);
+        }
+
+        @Override
+        public void storeResource(Resource<?, ?, ?, ?, ?> resource) {
+            final String IP_ADDRESSES_PROPERTY_NAME = "Bound Address";
+            /* here, we used to check if "WildFly Server".equals(resource.getResourceType().getName().getNameString())
+             * but resource.getParent() == null should select the same node */
+            if (resource.getParent() == null && resource instanceof DMRResource) {
+                DMRResource dmrResource = (DMRResource) resource;
+                DMRResourceConfigurationPropertyInstance adrProp = null;
+                for (DMRResourceConfigurationPropertyInstance p : dmrResource.getResourceConfigurationProperties()) {
+                    if (IP_ADDRESSES_PROPERTY_NAME.equals(p.getName().getNameString())) {
+                        adrProp = p;
+                        break;
+                    }
+                }
+                if (adrProp != null) {
+                    String displayAddresses = null;
+                    try {
+                        InetAddress dmrAddr = InetAddress.getByName(adrProp.getValue());
+                        if (dmrAddr.isAnyLocalAddress()) {
+                            /* resolve the addresses rather than showing 0.0.0.0 */
+                            InetAddress[] resolvedAddresses = resolveHost();
+                            displayAddresses = Stream.of(resolvedAddresses).map(a -> a.getHostAddress())
+                                    .collect(Collectors.joining(", "));
+                            adrProp.setValue(displayAddresses);
+                        }
+                    } catch (UnknownHostException e) {
+                        MsgLogger.LOG.warnf(e, "Could not parse IP address [%s]", adrProp.getValue());
+                    }
+                }
+            }
+            delegate.storeResource(resource);
+        }
+
     }
 }

@@ -155,7 +155,7 @@ public class DMRDiscovery {
                     value = resource.getModelNode().get(attribute[0]);
                 } else {
                     Address addr = resource.getAddress().clone().add(Address.parse(configPath));
-                    value = new CoreJBossASClient(mcc).getAttribute(attribute[0], addr);
+                    value = new CoreJBossASClient(mcc).getAttribute(true, attribute[0], addr);
                 }
 
                 if (attribute.length > 1 && value != null && value.isDefined()) {
@@ -165,7 +165,7 @@ public class DMRDiscovery {
                 DMRResourceConfigurationPropertyInstance cpi = new DMRResourceConfigurationPropertyInstance(
                         ID.NULL_ID, configPropType.getName(), configPropType);
                 cpi.setValue((value != null && value.isDefined()) ? value.asString() : null);
-                resource.addConfigurationProperty(cpi);
+                resource.addResourceConfigurationProperty(cpi);
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to discover config [%s] for resource [%s]", configPropType, resource);
             }
