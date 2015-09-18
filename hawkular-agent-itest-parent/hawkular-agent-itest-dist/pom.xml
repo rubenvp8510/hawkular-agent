@@ -23,7 +23,7 @@
   <parent>
     <groupId>org.hawkular.agent</groupId>
     <artifactId>hawkular-agent-itest-parent</artifactId>
-    <version>0.6.2.Final-SNAPSHOT</version>
+    <version>0.7.1.Final-SNAPSHOT</version>
   </parent>
 
   <artifactId>hawkular-agent-itest-dist</artifactId>
@@ -36,21 +36,21 @@
     <kettle.build.type>production</kettle.build.type>
     <assembly.dir>${project.build.directory}/assembly</assembly.dir>
     <wildfly.dist.zip.root.dir>wildfly-${version.org.wildfly}</wildfly.dist.zip.root.dir>
-    <hawkular.dist.zip.root.dir>hawkular-${project.version}</hawkular.dist.zip.root.dir>
+    <hawkular.dist.zip.root.dir>${project.artifactId}-${project.version}</hawkular.dist.zip.root.dir>
   </properties>
 
   <dependencies>
     <dependency>
       <groupId>org.hawkular.agent</groupId>
       <artifactId>hawkular-monitor</artifactId>
-      <version>0.6.2.Final-SNAPSHOT</version>
+      <version>0.7.1.Final-SNAPSHOT</version>
       <classifier>module</classifier>
       <type>zip</type>
     </dependency>
     <dependency>
       <groupId>org.hawkular.agent</groupId>
       <artifactId>hawkular-helloworld-war</artifactId>
-      <version>0.6.2.Final-SNAPSHOT</version>
+      <version>0.7.1.Final-SNAPSHOT</version>
       <type>war</type>
     </dependency>
     <dependency>

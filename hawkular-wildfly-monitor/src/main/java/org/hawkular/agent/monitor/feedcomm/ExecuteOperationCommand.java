@@ -32,6 +32,7 @@ import org.hawkular.agent.monitor.inventory.dmr.DMRResource;
 import org.hawkular.agent.monitor.inventory.dmr.LocalDMRManagedServer;
 import org.hawkular.agent.monitor.inventory.dmr.RemoteDMRManagedServer;
 import org.hawkular.agent.monitor.log.MsgLogger;
+import org.hawkular.bus.common.BasicMessageWithExtraData;
 import org.hawkular.bus.common.BinaryData;
 import org.hawkular.cmdgw.api.ExecuteOperationRequest;
 import org.hawkular.cmdgw.api.ExecuteOperationResponse;
@@ -49,36 +50,37 @@ public class ExecuteOperationCommand implements Command<ExecuteOperationRequest,
     public static final Class<ExecuteOperationRequest> REQUEST_CLASS = ExecuteOperationRequest.class;
 
     @Override
-    public ExecuteOperationResponse execute(ExecuteOperationRequest request, BinaryData binaryData,
-            CommandContext context) throws Exception {
+    public BasicMessageWithExtraData<ExecuteOperationResponse> execute(ExecuteOperationRequest request,
+            BinaryData binaryData, CommandContext context) throws Exception {
         MsgLogger.LOG.infof("Received request to execute operation [%s] on resource [%s]",
                 request.getOperationName(), request.getResourcePath());
 
-        FeedCommProcessor processor = context.getFeedCommProcessor();
-        MonitorServiceConfiguration config = processor.getMonitorServiceConfiguration();
+        MonitorServiceConfiguration config = context.getMonitorServiceConfiguration();
 
         // Based on the resource ID we need to know which inventory manager is handling it.
         // From the inventory manager, we can get the actual resource.
         CanonicalPath canonicalPath = CanonicalPath.fromString(request.getResourcePath());
         String resourceId = canonicalPath.ids().getResourcePath().getSegment().getElementId();
         ResourceIdParts idParts = InventoryIdUtil.parseResourceId(resourceId);
-        ManagedServer managedServer = config.managedServersMap.get(new Name(idParts.managedServerName));
+        ManagedServer managedServer = config.managedServersMap.get(new Name(idParts.getManagedServerName()));
         if (managedServer == null) {
-            throw new IllegalArgumentException(
-                    String.format("Cannot execute operation: unknown managed server [%s]", idParts.managedServerName));
+            throw new IllegalArgumentException(String.format("Cannot execute operation: unknown managed server [%s]",
+                    idParts.getManagedServerName()));
         }
 
         if (managedServer instanceof LocalDMRManagedServer || managedServer instanceof RemoteDMRManagedServer) {
-            return executeOperationDMR(resourceId, request, processor, managedServer);
+            return executeOperationDMR(resourceId, request, context, managedServer);
         } else {
             throw new IllegalStateException("Cannot execute operation: report this bug: " + managedServer.getClass());
         }
     }
 
-    private ExecuteOperationResponse executeOperationDMR(String resourceId, ExecuteOperationRequest request,
-            FeedCommProcessor processor, ManagedServer managedServer) throws Exception {
+    private BasicMessageWithExtraData<ExecuteOperationResponse> executeOperationDMR(String resourceId,
+            ExecuteOperationRequest request,
+            CommandContext context, ManagedServer managedServer) throws Exception {
 
-        DMRInventoryManager inventoryManager = processor.getDmrServerInventories().get(managedServer);
+        DMRInventoryManager inventoryManager = context.getDiscoveryService().getDmrServerInventories()
+                .get(managedServer);
         if (inventoryManager == null) {
             throw new IllegalArgumentException(
                     String.format("Cannot execute operation: missing inventory manager [%s]", managedServer));
@@ -142,6 +144,6 @@ public class ExecuteOperationCommand implements Command<ExecuteOperationRequest,
             response.setMessage(e.toString());
         }
 
-        return response;
+        return new BasicMessageWithExtraData<>(response, null);
     }
 }

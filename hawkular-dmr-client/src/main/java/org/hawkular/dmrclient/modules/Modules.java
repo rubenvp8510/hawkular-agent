@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.hawkular.agent.monitor.modules;
+package org.hawkular.dmrclient.modules;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -33,7 +32,7 @@ import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
-import org.hawkular.agent.monitor.feedcomm.InvalidCommandRequestException;
+import org.hawkular.dmrclient.modules.AddModuleRequest.ModuleResource;
 
 /**
  * Operations related to JBoss modules. Inspired by {@code org.jboss.as.cli.handlers.module.ASModuleHandler} from
@@ -294,10 +293,9 @@ public class Modules {
      * @throws IOException
      */
     void copyResources(AddModuleRequest addModuleRequest, File moduleDir) throws IOException {
-        for (String srcPath : addModuleRequest.getResources()) {
-            File srcFile = new File(srcPath);
-            File destFile = new File(moduleDir, srcFile.getName());
-            Files.copy(srcFile.toPath(), destFile.toPath(), StandardCopyOption.COPY_ATTRIBUTES);
+        for (ModuleResource resource : addModuleRequest.getResources()) {
+            File destFile = new File(moduleDir, resource.getFileName());
+            Files.copy(resource.getInput(), destFile.toPath());
         }
     }
 
@@ -306,25 +304,17 @@ public class Modules {
                 moduleName.replace('.', File.separatorChar) + File.separatorChar + (slot == null ? "main" : slot));
     }
 
-    void validate(AddModuleRequest addModuleRequest) throws InvalidCommandRequestException {
+    void validate(AddModuleRequest addModuleRequest) throws IllegalArgumentException {
         if (!modulesDir.exists()) {
-            throw new InvalidCommandRequestException("The $JBOSS_HOME/modules director [" + modulesDir.getAbsolutePath()
+            throw new IllegalArgumentException("The $JBOSS_HOME/modules director [" + modulesDir.getAbsolutePath()
                     + "] must exist to be able to create a new module.");
         }
         final String moduleName = addModuleRequest.getModuleName();
         Objects.requireNonNull(moduleName, AddModuleRequest.class.getName() + ".moduleName cannot be null");
         final File moduleDir = getModulePath(moduleName, addModuleRequest.getSlot());
         if (moduleDir.exists()) {
-            throw new InvalidCommandRequestException(
+            throw new IllegalArgumentException(
                     "[" + moduleName + "] already exists at [" + moduleDir.getAbsolutePath() + "]");
-        }
-
-        for (String srcPath : addModuleRequest.getResources()) {
-            File srcFile = new File(srcPath);
-            if (!srcFile.exists()) {
-                throw new InvalidCommandRequestException("File [" + srcFile.getAbsolutePath()
-                        + "] to copy to a new module [" + addModuleRequest.getModuleName() + "] does not exist.");
-            }
         }
 
     }
@@ -360,12 +350,12 @@ public class Modules {
             writer.writeAttribute(Name.value.toString(), mainClass);
         }
 
-        final Set<String> resources = addModuleRequest.getResources();
+        final Set<ModuleResource> resources = addModuleRequest.getResources();
         if (resources != null && !resources.isEmpty()) {
             writer.writeStartElement(Name.resources.toString());
-            for (String resPath : resources) {
+            for (ModuleResource resource : resources) {
                 writer.writeEmptyElement(Name.resource_root.toString());
-                writer.writeAttribute(Name.path.toString(), new File(resPath).getName());
+                writer.writeAttribute(Name.path.toString(), resource.getFileName());
             }
             writer.writeEndElement();
         }

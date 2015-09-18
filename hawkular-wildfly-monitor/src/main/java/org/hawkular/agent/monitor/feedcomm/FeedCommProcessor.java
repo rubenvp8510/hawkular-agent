@@ -16,6 +16,7 @@
  */
 package org.hawkular.agent.monitor.feedcomm;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -24,16 +25,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.hawkular.agent.monitor.extension.MonitorServiceConfiguration;
-import org.hawkular.agent.monitor.inventory.ManagedServer;
-import org.hawkular.agent.monitor.inventory.dmr.DMRInventoryManager;
 import org.hawkular.agent.monitor.log.MsgLogger;
+import org.hawkular.agent.monitor.service.DiscoveryService;
 import org.hawkular.agent.monitor.service.Util;
 import org.hawkular.agent.monitor.storage.HttpClientBuilder;
 import org.hawkular.bus.common.BasicMessage;
 import org.hawkular.bus.common.BasicMessageWithExtraData;
+import org.hawkular.bus.common.BinaryData;
 import org.hawkular.cmdgw.api.ApiDeserializer;
 import org.hawkular.cmdgw.api.AuthMessage;
 import org.hawkular.cmdgw.api.Authentication;
+import org.hawkular.cmdgw.api.GenericErrorResponse;
 import org.hawkular.cmdgw.api.GenericErrorResponseBuilder;
 
 import com.squareup.okhttp.Response;
@@ -42,6 +44,7 @@ import com.squareup.okhttp.ws.WebSocketCall;
 import com.squareup.okhttp.ws.WebSocketListener;
 
 import okio.Buffer;
+import okio.BufferedSink;
 import okio.BufferedSource;
 
 public class FeedCommProcessor implements WebSocketListener {
@@ -54,6 +57,7 @@ public class FeedCommProcessor implements WebSocketListener {
         VALID_COMMANDS.put(ExecuteOperationCommand.REQUEST_CLASS.getName(), ExecuteOperationCommand.class);
         VALID_COMMANDS.put(DeployApplicationCommand.REQUEST_CLASS.getName(), DeployApplicationCommand.class);
         VALID_COMMANDS.put(AddJdbcDriverCommand.REQUEST_CLASS.getName(), AddJdbcDriverCommand.class);
+        VALID_COMMANDS.put(AddDatasourceCommand.REQUEST_CLASS.getName(), AddDatasourceCommand.class);
     }
 
     private final int disconnectCode = 1000;
@@ -61,7 +65,7 @@ public class FeedCommProcessor implements WebSocketListener {
 
     private final HttpClientBuilder httpClientBuilder;
     private final MonitorServiceConfiguration config;
-    private final Map<ManagedServer, DMRInventoryManager> dmrServerInventories;
+    private final DiscoveryService discoveryService;
     private final String feedcommUrl;
     private final ExecutorService sendExecutor = Executors.newSingleThreadExecutor();
 
@@ -69,14 +73,15 @@ public class FeedCommProcessor implements WebSocketListener {
     private WebSocket webSocket;
 
     public FeedCommProcessor(HttpClientBuilder httpClientBuilder, MonitorServiceConfiguration config, String feedId,
-            Map<ManagedServer, DMRInventoryManager> dmrServerInventories) {
+            DiscoveryService discoveryService) {
+
         if (feedId == null || feedId.isEmpty()) {
             throw new IllegalArgumentException("Must have a valid feed ID to communicate with the server");
         }
 
         this.httpClientBuilder = httpClientBuilder;
         this.config = config;
-        this.dmrServerInventories = dmrServerInventories;
+        this.discoveryService = discoveryService;
 
         try {
             StringBuilder url;
@@ -87,14 +92,6 @@ public class FeedCommProcessor implements WebSocketListener {
         } catch (Exception e) {
             throw new IllegalArgumentException("Cannot build URL to the server command-gateway endpoint", e);
         }
-    }
-
-    public MonitorServiceConfiguration getMonitorServiceConfiguration() {
-        return config;
-    }
-
-    public Map<ManagedServer, DMRInventoryManager> getDmrServerInventories() {
-        return dmrServerInventories;
     }
 
     /**
@@ -137,22 +134,34 @@ public class FeedCommProcessor implements WebSocketListener {
      *
      * @param message the message to send
      */
-    public void sendAsync(BasicMessage message) {
+    public void sendAsync(BasicMessageWithExtraData<? extends BasicMessage> messageWithData) {
         if (webSocket == null) {
             throw new IllegalStateException("WebSocket connection was closed. Cannot send any messages");
         }
 
+        BasicMessage message = messageWithData.getBasicMessage();
         configurationAuthentication(message);
-
-        String messageString = ApiDeserializer.toHawkularFormat(message);
 
         sendExecutor.execute(new Runnable() {
             @Override
             public void run() {
                 try {
-                    Buffer buffer = new Buffer();
-                    buffer.writeUtf8(messageString);
-                    FeedCommProcessor.this.webSocket.sendMessage(WebSocket.PayloadType.TEXT, buffer);
+                    if (messageWithData.getBinaryData() == null) {
+                        String messageString = ApiDeserializer.toHawkularFormat(message);
+                        Buffer buffer = new Buffer();
+                        buffer.writeUtf8(messageString);
+                        FeedCommProcessor.this.webSocket.sendMessage(WebSocket.PayloadType.TEXT, buffer);
+                    } else {
+                        BinaryData messageData = ApiDeserializer.toHawkularFormat(message,
+                                messageWithData.getBinaryData());
+                        BufferedSink sink = FeedCommProcessor.this.webSocket
+                                .newMessageSink(WebSocket.PayloadType.BINARY);
+                        try {
+                            emitToSink(messageData, sink);
+                        } finally {
+                            sink.close();
+                        }
+                    }
                 } catch (Throwable t) {
                     MsgLogger.LOG.errorFailedToSendOverFeedComm(message.getClass().getName(), t);
                 }
@@ -166,17 +175,42 @@ public class FeedCommProcessor implements WebSocketListener {
      * @param message the message to send
      * @throws IOException if the message failed to be sent
      */
-    public void sendSync(BasicMessage message) throws Exception {
+    public void sendSync(BasicMessageWithExtraData<? extends BasicMessage> messageWithData) throws Exception {
         if (webSocket == null) {
             throw new IllegalStateException("WebSocket connection was closed. Cannot send any messages");
         }
 
+        BasicMessage message = messageWithData.getBasicMessage();
         configurationAuthentication(message);
 
-        String messageString = ApiDeserializer.toHawkularFormat(message);
-        Buffer buffer = new Buffer();
-        buffer.writeUtf8(messageString);
-        FeedCommProcessor.this.webSocket.sendMessage(WebSocket.PayloadType.TEXT, buffer);
+        if (messageWithData.getBinaryData() == null) {
+            String messageString = ApiDeserializer.toHawkularFormat(message);
+            Buffer buffer = new Buffer();
+            buffer.writeUtf8(messageString);
+            FeedCommProcessor.this.webSocket.sendMessage(WebSocket.PayloadType.TEXT, buffer);
+        } else {
+            BinaryData messageData = ApiDeserializer.toHawkularFormat(message, messageWithData.getBinaryData());
+            BufferedSink sink = FeedCommProcessor.this.webSocket.newMessageSink(WebSocket.PayloadType.BINARY);
+            try {
+                emitToSink(messageData, sink);
+            } finally {
+                sink.close();
+            }
+        }
+    }
+
+    private void emitToSink(BinaryData in, BufferedSink out) throws RuntimeException {
+        int bufferSize = 32768;
+        try {
+            InputStream input = new BufferedInputStream(in, bufferSize);
+            byte[] buffer = new byte[bufferSize];
+            for (int bytesRead = input.read(buffer); bytesRead != -1; bytesRead = input.read(buffer)) {
+                out.write(buffer, 0, bytesRead);
+                out.flush();
+            }
+        } catch (IOException ioe) {
+            throw new RuntimeException("Failed to emit to sink", ioe);
+        }
     }
 
     @Override
@@ -220,7 +254,7 @@ public class FeedCommProcessor implements WebSocketListener {
     @SuppressWarnings({ "rawtypes", "unchecked" })
     public void onMessage(BufferedSource payload, WebSocket.PayloadType payloadType) throws IOException {
 
-        BasicMessage response;
+        BasicMessageWithExtraData<? extends BasicMessage> response;
         String requestClassName = "?";
 
         try {
@@ -254,10 +288,12 @@ public class FeedCommProcessor implements WebSocketListener {
                 if (commandClass == null) {
                     MsgLogger.LOG.errorInvalidCommandRequestFeed(requestClassName);
                     String errorMessage = "Invalid command request: " + requestClassName;
-                    response = new GenericErrorResponseBuilder().setErrorMessage(errorMessage).build();
+                    GenericErrorResponse errorMsg = new GenericErrorResponseBuilder().setErrorMessage(errorMessage)
+                            .build();
+                    response = new BasicMessageWithExtraData<BasicMessage>(errorMsg, null);
                 } else {
                     Command command = commandClass.newInstance();
-                    CommandContext context = new CommandContext(this);
+                    CommandContext context = new CommandContext(this, this.config, this.discoveryService);
                     response = command.execute(msg, msgWithData.getBinaryData(), context);
                 }
             } finally {
@@ -267,10 +303,11 @@ public class FeedCommProcessor implements WebSocketListener {
         } catch (Throwable t) {
             MsgLogger.LOG.errorCommandExecutionFailureFeed(requestClassName, t);
             String errorMessage = "Command failed [" + requestClassName + "]";
-            response = new GenericErrorResponseBuilder()
+            GenericErrorResponse errorMsg = new GenericErrorResponseBuilder()
                     .setThrowable(t)
                     .setErrorMessage(errorMessage)
                     .build();
+            response = new BasicMessageWithExtraData<BasicMessage>(errorMsg, null);
         }
 
         // send the response back to the server

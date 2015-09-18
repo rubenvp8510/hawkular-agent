@@ -30,24 +30,23 @@ import org.hawkular.agent.monitor.inventory.dmr.RemoteDMRManagedServer;
 import org.hawkular.agent.monitor.log.MsgLogger;
 import org.hawkular.bus.common.BasicMessageWithExtraData;
 import org.hawkular.bus.common.BinaryData;
-import org.hawkular.cmdgw.api.DeployApplicationRequest;
-import org.hawkular.cmdgw.api.DeployApplicationResponse;
-import org.hawkular.dmrclient.DeploymentJBossASClient;
+import org.hawkular.cmdgw.api.AddDatasourceRequest;
+import org.hawkular.cmdgw.api.AddDatasourceResponse;
+import org.hawkular.dmrclient.DatasourceJBossASClient;
 import org.hawkular.inventory.api.model.CanonicalPath;
-import org.jboss.as.controller.client.ModelControllerClient;
 
 /**
- * Deploys an application on a resource.
+ * Adds an Datasource on a resource.
  */
-public class DeployApplicationCommand implements Command<DeployApplicationRequest, DeployApplicationResponse> {
-    public static final Class<DeployApplicationRequest> REQUEST_CLASS = DeployApplicationRequest.class;
+public class AddDatasourceCommand implements Command<AddDatasourceRequest, AddDatasourceResponse> {
+    public static final Class<AddDatasourceRequest> REQUEST_CLASS = AddDatasourceRequest.class;
 
     @Override
-    public BasicMessageWithExtraData<DeployApplicationResponse> execute(DeployApplicationRequest request,
-            BinaryData applicationContent, CommandContext context) throws Exception {
+    public BasicMessageWithExtraData<AddDatasourceResponse> execute(AddDatasourceRequest request,
+            BinaryData jdbcDriverContent, CommandContext context) throws Exception {
 
-        MsgLogger.LOG.infof("Received request to deploy application [%s] on resource [%s]",
-                request.getDestinationFileName(), request.getResourcePath());
+        MsgLogger.LOG.infof("Received request to add the Datasource [%s] on resource [%s]", request.getDatasourceName(),
+                request.getResourcePath());
 
         MonitorServiceConfiguration config = context.getMonitorServiceConfiguration();
 
@@ -57,55 +56,62 @@ public class DeployApplicationCommand implements Command<DeployApplicationReques
         String resourceId = canonicalPath.ids().getResourcePath().getSegment().getElementId();
         ResourceIdParts idParts = InventoryIdUtil.parseResourceId(resourceId);
         ManagedServer managedServer = config.managedServersMap.get(new Name(idParts.getManagedServerName()));
+
         if (managedServer == null) {
-            throw new IllegalArgumentException(String.format("Cannot deploy application: unknown managed server [%s]",
+            throw new IllegalArgumentException(String.format("Cannot add Datasource: unknown managed server [%s]",
                     idParts.getManagedServerName()));
         }
 
         if (managedServer instanceof LocalDMRManagedServer || managedServer instanceof RemoteDMRManagedServer) {
-            return deployApplicationDMR(resourceId, request, applicationContent, context, managedServer);
+            return addDmr(resourceId, request, jdbcDriverContent, context, managedServer);
         } else {
-            throw new IllegalStateException("Cannot deploy application: report this bug: " + managedServer.getClass());
+            throw new IllegalStateException("Cannot add Datasource: report this bug: " + managedServer.getClass());
         }
     }
 
-    private BasicMessageWithExtraData<DeployApplicationResponse> deployApplicationDMR(String resourceId,
-            DeployApplicationRequest request,
-            BinaryData applicationContent, CommandContext context, ManagedServer managedServer) throws Exception {
+    private BasicMessageWithExtraData<AddDatasourceResponse> addDmr(String resourceId, AddDatasourceRequest request,
+            BinaryData jdbcDriverContent, CommandContext context, ManagedServer managedServer) throws Exception {
 
         DMRInventoryManager inventoryManager = context.getDiscoveryService().getDmrServerInventories()
                 .get(managedServer);
         if (inventoryManager == null) {
             throw new IllegalArgumentException(
-                    String.format("Cannot deploy application: missing inventory manager [%s]", managedServer));
+                    String.format("Cannot add Datasource: missing inventory manager [%s]", managedServer));
         }
-
-        final String resourcePath = request.getResourcePath();
-        final String destFileName = request.getDestinationFileName();
-        final boolean enabled = (request.getEnabled() == null) ? true : request.getEnabled().booleanValue();
 
         ResourceManager<DMRResource> resourceManager = inventoryManager.getResourceManager();
         DMRResource resource = resourceManager.getResource(new ID(resourceId));
         if (resource == null) {
             throw new IllegalArgumentException(
-                    String.format("Cannot deploy application: unknown resource [%s]", resourcePath));
+                    String.format("Cannot add Datasource: unknown resource [%s]", request.getResourcePath()));
         }
 
-        // find the operation we need to execute - make sure it exists and get the address for the resource to invoke
-        DeployApplicationResponse response = new DeployApplicationResponse();
-        response.setResourcePath(resourcePath);
+        AddDatasourceResponse response = new AddDatasourceResponse();
+        response.setResourcePath(request.getResourcePath());
 
-        try (ModelControllerClient mcc = inventoryManager.getModelControllerClientFactory().createClient()) {
-            DeploymentJBossASClient client = new DeploymentJBossASClient(mcc);
-            client.deployStandalone(destFileName, applicationContent, enabled);
+        try (DatasourceJBossASClient dsc = new DatasourceJBossASClient(
+                inventoryManager.getModelControllerClientFactory().createClient())) {
+
+            if (request.isXaDatasource()) {
+                dsc.addXaDatasource(request.getDatasourceName(), request.getJndiName(), request.getDriverName(),
+                        request.getXaDataSourceClass(),
+                        request.getDatasourceProperties(), request.getUserName(), request.getPassword(),
+                        request.getSecurityDomain());
+            } else {
+                dsc.addDatasource(request.getDatasourceName(), request.getJndiName(), request.getDriverName(),
+                        request.getDriverClass(), request.getConnectionUrl(),
+                        request.getDatasourceProperties(), request.getUserName(), request.getPassword());
+            }
+
             response.setStatus("OK");
-            response.setMessage(String.format("Uploaded [%s]. Enabled=[%s].", destFileName, enabled));
-            context.getDiscoveryService().discoverAllResourcesForAllManagedServers();
+            response.setMessage(String.format("Added Datasource: %s", request.getDatasourceName()));
         } catch (Exception e) {
+            MsgLogger.LOG.errorFailedToExecuteCommand(e, this.getClass().getName(), request);
             response.setStatus("ERROR");
             response.setMessage(e.toString());
         }
 
         return new BasicMessageWithExtraData<>(response, null);
     }
+
 }
